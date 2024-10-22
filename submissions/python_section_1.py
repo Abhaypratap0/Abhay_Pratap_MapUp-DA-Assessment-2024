@@ -107,15 +107,21 @@ def find_all_dates(text: str) -> List[str]:
     
     i = 0
     while i < len(text):
+        # Check for "dd-mm-yyyy"
         if i + 10 <= len(text) and text[i:i+2].isdigit() and text[i+2] == '-' and text[i+5] == '-' and text[i+6:i+10].isdigit():
             dates.append(text[i:i+10])
             i += 10
+        
+        # Check for "mm/dd/yyyy"
         elif i + 10 <= len(text) and text[i:i+2].isdigit() and text[i+2] == '/' and text[i+5] == '/' and text[i+6:i+10].isdigit():
             dates.append(text[i:i+10])
             i += 10
+        
+        # Check for "yyyy.mm.dd"
         elif i + 10 <= len(text) and text[i:i+4].isdigit() and text[i+4] == '.' and text[i+7] == '.' and text[i+8:i+10].isdigit():
             dates.append(text[i:i+10])
             i += 10
+        
         else:
             i += 1
 
@@ -135,9 +141,9 @@ def polyline_to_dataframe(polyline_str: str) -> pd.DataFrame:
     import polyline 
     from math import radians, sin, cos, sqrt, atan2
     
-    # Haversine formula
+    # Haversine formula to calculate distance between two lat/lon points
     def haversine(lat1, lon1, lat2, lon2):
-        R = 6371000
+        R = 6371000  # Radius of Earth in meters
         phi1, phi2 = radians(lat1), radians(lat2)
         delta_phi = radians(lat2 - lat1)
         delta_lambda = radians(lon2 - lon1)
@@ -145,16 +151,25 @@ def polyline_to_dataframe(polyline_str: str) -> pd.DataFrame:
         a = sin(delta_phi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(delta_lambda / 2) ** 2
         c = 2 * atan2(sqrt(a), sqrt(1 - a))
         
-        return R * c 
+        return R * c  # Distance in meters
+    
+    # Decode the polyline string into a list of (latitude, longitude) tuples
     coordinates = polyline.decode(polyline_str)
     
+    # Create a DataFrame with latitude and longitude columns
     df = pd.DataFrame(coordinates, columns=['latitude', 'longitude'])
-    distances = [0] 
+    
+    # Initialize the distance column
+    distances = [0]  # First point has no previous point, so distance is 0
+    
+    # Calculate the distance between consecutive points using the Haversine formula
     for i in range(1, len(coordinates)):
         lat1, lon1 = coordinates[i - 1]
         lat2, lon2 = coordinates[i]
         dist = haversine(lat1, lon1, lat2, lon2)
         distances.append(dist)
+    
+    # Add the distance column to the DataFrame
     df['distance'] = distances
     
     return df
@@ -174,18 +189,21 @@ def rotate_and_multiply_matrix(matrix: List[List[int]]) -> List[List[int]]:
     # Your code here
     n = len(matrix)
     
-    rotated_matrix = [[0] * n for _ in range(n)]  
+    # Step 1: Rotate the matrix by 90 degrees clockwise
+    rotated_matrix = [[0] * n for _ in range(n)]  # Initialize the rotated matrix
     
     for i in range(n):
         for j in range(n):
             rotated_matrix[j][n - 1 - i] = matrix[i][j]
+
+    # Step 2: Replace each element with the sum of its row and column, excluding itself
     final_matrix = [[0] * n for _ in range(n)]
     
     for i in range(n):
         for j in range(n):
-            row_sum = sum(rotated_matrix[i])
-            col_sum = sum(rotated_matrix[k][j] for k in range(n))  
-            final_matrix[i][j] = row_sum + col_sum - 2*rotated_matrix[i][j] 
+            row_sum = sum(rotated_matrix[i])  # Sum of the current row
+            col_sum = sum(rotated_matrix[k][j] for k in range(n))  # Sum of the current column
+            final_matrix[i][j] = row_sum + col_sum - 2*rotated_matrix[i][j]  # Exclude the element itself
     
     return final_matrix
 
@@ -203,15 +221,20 @@ def time_check(df) -> pd.Series:
     def time_to_seconds(time_str):
         h, m, s = map(int, time_str.split(':'))
         return h * 3600 + m * 60 + s
+    # Initialize the days of the week in order
     days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
+    
+    # Group by (id, id_2)
     grouped = df.groupby(['id', 'id_2'])
     
+    # To store the results for each (id, id_2) group
     incomplete_flags = []
-
+    
+    # Iterate over each group
     for (id_val, id2_val), group in grouped:
-        covered_days = {day: [] for day in days_of_week} 
+        covered_days = {day: [] for day in days_of_week}  # Dictionary to track coverage per day
         
+        # Check each row in the group
         for _, row in group.iterrows():
             start_day = row['startDay']
             start_time = time_to_seconds(row['startTime'])
@@ -221,40 +244,123 @@ def time_check(df) -> pd.Series:
             start_index = days_of_week.index(start_day)
             end_index = days_of_week.index(end_day)
             
-            if start_index == end_index:  
+            # Process the days that are spanned by the start and end
+            if start_index == end_index:  # Single-day span
                 covered_days[start_day].append((start_time, end_time))
-            else:
+            else:  # Multi-day span
+                # Cover from start_time to the end of start_day (i.e., 23:59:59)
                 covered_days[start_day].append((start_time, 86399))
                 
+                # Cover intermediate days fully (00:00:00 to 23:59:59)
                 for i in range(start_index + 1, end_index):
                     covered_days[days_of_week[i]].append((0, 86399))
                 
+                # Cover from the beginning of end_day (00:00:00) to end_time
                 covered_days[end_day].append((0, end_time))
         
+        # Check each day for full 24-hour coverage (from 00:00:00 to 23:59:59)
         full_24_hour_coverage = True
         for day, time_ranges in covered_days.items():
             if not time_ranges:
                 full_24_hour_coverage = False
                 break
             
+            # Sort time ranges by start time and check if they cover the whole day
             time_ranges.sort()
             current_end = 0
             
             for start, end in time_ranges:
-                if start > current_end:  
+                if start > current_end:  # There is a gap
                     full_24_hour_coverage = False
                     break
                 current_end = max(current_end, end)
             
-            if current_end < 86399:  
+            if current_end < 86399:  # Did not cover the full 24 hours
                 full_24_hour_coverage = False
                 break
         
+        # Check if all 7 days are covered
         has_full_week_coverage = all(covered_days[day] for day in days_of_week)
         is_complete = has_full_week_coverage and full_24_hour_coverage
         incomplete_flags.append((id_val, id2_val, not is_complete))
     
+    # Create a boolean Series with a multi-index
     result_df = pd.DataFrame(incomplete_flags, columns=['id', 'id_2', 'incomplete'])
     result_df.set_index(['id', 'id_2'], inplace=True)
     
     return result_df['incomplete']
+
+
+# ------------  Main execution
+
+
+# Question 1
+
+# Given Test cases
+
+# print(reverse_by_n_elements([1, 2, 3, 4, 5, 6, 7, 8], 3))  # Output: [3, 2, 1, 6, 5, 4, 8, 7]
+# print(reverse_by_n_elements([1, 2, 3, 4, 5], 2))           # Output: [2, 1, 4, 3, 5]
+# print(reverse_by_n_elements([10, 20, 30, 40, 50, 60, 70], 4))  # Output: [40, 30, 20, 10, 70, 60, 50]
+
+
+# Question 2
+
+# Given Test cases
+
+# print(group_by_length(["apple", "bat", "car", "elephant", "dog", "bear"])) # Output: {3: ['bat', 'car', 'dog'], 4: ['bear'], 5: ['apple'], 8: ['elephant']}
+# print(group_by_length(["one", "two", "three", "four"]))                    # Output: {3: ['one', 'two'], 4: ['four'], 5: ['three']}
+
+
+# Question 3
+# Given Test cases
+
+# nested_dict_example = {
+#     "road": {
+#         "name": "Highway 1",
+#         "length": 350,
+#         "sections": [
+#             {
+#                 "id": 1,
+#                 "condition": {
+#                     "pavement": "good",
+#                     "traffic": "moderate"
+#                 }
+#             }
+#         ]
+#     }
+# }
+
+# print(flatten_dict(nested_dict_example))  
+
+#Output:
+# {
+#     "road.name": "Highway 1",
+#     "road.length": 350,
+#     "road.sections[0].id": 1,
+#     "road.sections[0].condition.pavement": "good",
+#     "road.sections[0].condition.traffic": "moderate"
+# }
+
+
+
+# Question 4
+# Given Test cases
+
+# print(unique_permutations([1, 1, 2])) # Output: [[1, 1, 2],[1, 2, 1],[2, 1, 1]]
+
+# Question 5
+# Given Test cases
+
+# print(find_all_dates(text = "I was born on 23-08-1994, my friend on 08/23/1994, and another one on 1994.08.23."))  #Output: ["23-08-1994", "08/23/1994", "1994.08.23"]
+
+# Question 7
+# Given Test cases
+
+# print(rotate_and_multiply_matrix([[1, 2, 3],[4, 5, 6],[7, 8, 9]]))  # Output: [[22, 19, 16], [23, 20, 17], [24, 21, 18]]
+
+# Question 8
+# Given Test cases
+# file_path = '/content/MapUp-DA-Assessment-2024/datasets/dataset-1.csv'
+# data = pd.read_csv(file_path)
+# result = time_check(data)
+# print(result)
