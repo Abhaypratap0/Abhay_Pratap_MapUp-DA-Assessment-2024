@@ -54,7 +54,7 @@ def unroll_distance_matrix(df)->pd.DataFrame():
     # Filter out self-loops (id_start == id_end)
     unrolled = unrolled[unrolled['id_start'] != unrolled['id_end']]
 
-    # Sort for better readability (optional)
+    # Sort for better readability 
     unrolled = unrolled.sort_values(by=['id_start', 'id_end']).reset_index(drop=True)
 
     return unrolled
